@@ -30,15 +30,16 @@ jobs:
           mkdir -p "GitHub Actions/CodeScan"
           bandit -r . -f json -o "GitHub Actions/CodeScan/bandit-report-${DATE}.json"
 
-      - name: Commit Bandit report
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git add "GitHub Actions/CodeScan/bandit-report-${DATE}.json"
-          git commit -m "Add CodeScan report (${DATE})"
-          git push origin HEAD:main
+                - name: Commit Bandit report
+            env:
+                GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            run: |
+                git config --global user.name "GitHub Actions"
+                git config --global user.email "actions@github.com"
+                git add "GitHub Actions/CodeScan/bandit-report-${DATE}.json"
+                git commit -m "Add CodeScan report (${DATE})" || echo "No changes to commit"
+                git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
+
 
   # ----------------------------
   # Job 2 : Analyse des dépendances Python avec pip-audit
