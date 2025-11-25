@@ -1,0 +1,151 @@
+name: Full Project Security Scan
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  # ----------------------------
+  # Job 1 : Analyse statique du code Python avec Bandit
+  # ----------------------------
+  CodeScan:
+    name: CodeScan (Bandit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set Date
+        run: echo "DATE=$(date +%m.%d.%Y)" >> $GITHUB_ENV
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run Bandit scan
+        run: |
+          mkdir -p "GitHub Actions/CodeScan"
+          bandit -r . -f json -o "GitHub Actions/CodeScan/bandit-report-${DATE}.json"
+
+      - name: Commit Bandit report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add "GitHub Actions/CodeScan/bandit-report-${DATE}.json"
+          git commit -m "Add CodeScan report (${DATE})"
+          git push origin HEAD:main
+
+  # ----------------------------
+  # Job 2 : Analyse des dépendances Python avec pip-audit
+  # ----------------------------
+  DependencyScan:
+    name: DependencyScan (pip-audit)
+    runs-on: ubuntu-latest
+    needs: CodeScan
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set Date
+        run: echo "DATE=$(date +%m.%d.%Y)" >> $GITHUB_ENV
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit
+        run: |
+          mkdir -p "GitHub Actions/DependencyScan"
+          pip-audit -f json -o "GitHub Actions/DependencyScan/pip-audit-report-${DATE}.json"
+
+      - name: Commit dependency report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add "GitHub Actions/DependencyScan/pip-audit-report-${DATE}.json"
+          git commit -m "Add DependencyScan report (${DATE})"
+          git push origin HEAD:main
+
+  # ----------------------------
+  # Job 3 : Scan des modèles
+  # ----------------------------
+  ModelScan:
+    name: ModelScan
+    runs-on: ubuntu-latest
+    needs: DependencyScan
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set Date
+        run: echo "DATE=$(date +%m.%d.%Y)" >> $GITHUB_ENV
+
+      - name: Scan models / sensitive files
+        run: |
+          mkdir -p "GitHub Actions/ModelScan"
+          find . -type f \( -name "*.pkl" -o -name "*.h5" -o -name "*.yaml" \) > "GitHub Actions/ModelScan/model-files-${DATE}.txt"
+
+      - name: Commit model scan report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add "GitHub Actions/ModelScan/*-${DATE}.txt"
+          git commit -m "Add ModelScan report (${DATE})"
+          git push origin HEAD:main
+
+  # ----------------------------
+  # Job 4 : Scan des conteneurs Docker
+  # ----------------------------
+  ContainerScan:
+    name: ContainerScan (Trivy)
+    runs-on: ubuntu-latest
+    needs: ModelScan
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set Date
+        run: echo "DATE=$(date +%m.%d.%Y)" >> $GITHUB_ENV
+
+      - name: Install Docker & Trivy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl docker.io
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin v0.57.0
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u alphakanejunior --password-stdin
+
+      - name: Download Trivy DB
+        run: trivy image --download-db-only
+
+      - name: List Docker images
+        run: docker images --format "{{.Repository}}:{{.Tag}}" > images.txt
+
+      - name: Scan all Docker images
+        run: |
+          mkdir -p "GitHub Actions/ContainerScan"
+          while read image; do
+            IMAGE_SAFE=$(echo $image | tr '/:' '_')
+            OUTPUT_FILE="GitHub Actions/ContainerScan/scan-${IMAGE_SAFE}-${DATE}.json"
+            echo "Scanning $image -> $OUTPUT_FILE"
+            trivy image --format json --ignore-unfixed --vuln-type os,library --severity CRITICAL,HIGH,MEDIUM,LOW -o "$OUTPUT_FILE" "$image"
+          done < images.txt
+
+      - name: Commit container scan results
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add "GitHub Actions/ContainerScan/*.json"
+          git commit -m "Add ContainerScan report (${DATE})"
+          git push origin HEAD:main
