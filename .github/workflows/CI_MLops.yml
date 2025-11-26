@@ -36,6 +36,7 @@ jobs:
         run: |
             git config --global user.name "GitHub Actions"
             git config --global user.email "actions@github.com"
+            git pull origin main --rebase || true
             git add "GitHub Actions/CodeScan/bandit-report-${DATE}.json"
             git commit -m "Add CodeScan report (${DATE})" || echo "No changes to commit"
             git push https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }} HEAD:main
