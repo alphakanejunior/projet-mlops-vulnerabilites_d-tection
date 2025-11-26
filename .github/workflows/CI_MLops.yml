@@ -61,8 +61,10 @@ jobs:
       - name: Run pip-audit
         run: |
           mkdir -p "GitHub Actions/DependencyScan"
-          # pip-audit -f json -o "GitHub Actions/DependencyScan/pip-audit-report-${DATE}.json" || true
-
+          pip-audit -f json -o "GitHub Actions/DependencyScan/pip-audit-report-${DATE}.json" || true
+          
+      - name: Verify DependencyScan output
+        run: ls -R "GitHub Actions/DependencyScan/"
       - name: Commit dependency report
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
