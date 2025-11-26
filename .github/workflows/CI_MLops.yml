@@ -65,27 +65,33 @@ jobs:
           
       - name: Verify DependencyScan output
         run: ls -R "GitHub Actions/DependencyScan/"
-        
+              
       - name: Commit and push results
         env:
-              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
+          
+          # 1. Stash les fichiers générés localement
+          git add .
+          git stash
       
-          # On récupère tous les commits distants (pas en shallow)
+          # 2. Déshallow + pull propre
+          git fetch --unshallow || true
           git fetch origin main
+          git pull origin main --rebase --strategy=ours || true
       
-          # On merge les changements distants (sans interaction)
-          git pull origin main --rebase --strategy=ours
+          # 3. Restaure les fichiers générés
+          git stash pop || true
       
-          # Ajout des fichiers
-          git add "GitHub Actions/DependencyScan/pip-audit-report-${DATE}.json"
+          # 4. Ajoute les fichiers restaurés
+          git add .
       
-          # Création du commit
-          git commit -m "Add DependencyScan report (${DATE})"
+          # 5. Commit si des fichiers ont changé
+          git commit -m "Add report (${DATE})" || echo "Nothing to commit"
       
-          # Push vers le repo
+          # 6. Push vers le repo
           git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}" HEAD:main
 
 
