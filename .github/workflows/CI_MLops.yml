@@ -108,15 +108,29 @@ jobs:
           mkdir -p "GitHub Actions/ModelScan"
           find . -type f \( -name "*.pkl" -o -name "*.h5" -o -name "*.yaml" \) > "GitHub Actions/ModelScan/model-files-${DATE}.txt"
 
-      - name: Commit model scan report
+      - name: Commit and push results
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add "GitHub Actions/ModelScan/*-${DATE}.txt"
-          git commit -m "Add ModelScan report (${DATE})"
-          git push origin HEAD:main
+      
+          # Déshallow pour pouvoir pull proprement
+          git fetch --unshallow || true
+          git fetch origin main
+      
+          # Rebase automatique sur les derniers commits (résout les push simultanés)
+          git pull origin main --rebase --strategy=ours || true
+      
+          # Ajout du/ des fichiers du scan
+          git add .
+      
+          # Création du commit si nécessaire
+          git commit -m "Add ModelScan report (${DATE})" || echo "Nothing to commit"
+      
+          # Push
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}" HEAD:main
+  
 
   # ----------------------------
   # Job 4 : Scan des conteneurs Docker
