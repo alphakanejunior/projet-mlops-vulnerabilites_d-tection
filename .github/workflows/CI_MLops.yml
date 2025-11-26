@@ -65,15 +65,29 @@ jobs:
           
       - name: Verify DependencyScan output
         run: ls -R "GitHub Actions/DependencyScan/"
-      - name: Commit dependency report
+        
+      - name: Commit and push results
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
+      
+          # On récupère tous les commits distants (pas en shallow)
+          git fetch origin main
+      
+          # On merge les changements distants (sans interaction)
+          git pull origin main --rebase --strategy=ours
+      
+          # Ajout des fichiers
           git add "GitHub Actions/DependencyScan/pip-audit-report-${DATE}.json"
+      
+          # Création du commit
           git commit -m "Add DependencyScan report (${DATE})"
-          git push origin HEAD:main
+      
+          # Push vers le repo
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}" HEAD:main
+
 
   # ----------------------------
   # Job 3 : Scan des modèles
